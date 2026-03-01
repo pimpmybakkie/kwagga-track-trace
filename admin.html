@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin – Tracking Updates</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; margin: auto; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 12px; }
+    input, button, select, textarea { width: 100%; padding: 10px; font-size: 16px; margin-top: 8px; }
+    button { cursor: pointer; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .muted { color: #666; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+
+  <h2>Admin – Tracking Updates</h2>
+  <p class="muted">Login om shipments te update.</p>
+
+  <div id="loginCard" class="card">
+    <h3>Login</h3>
+    <input id="email" type="email" placeholder="Admin email" />
+    <input id="password" type="password" placeholder="Password" />
+    <button id="btnLogin">Login</button>
+    <div id="loginMsg" class="muted"></div>
+  </div>
+
+  <div id="adminCard" class="card hidden">
+    <div class="row">
+      <div>
+        <h3>Update / Create shipment</h3>
+        <input id="trackingId" placeholder="Tracking ID (bv: KWG123456)" />
+        <select id="status">
+          <option value="Pending">Pending</option>
+          <option value="Collected">Collected</option>
+          <option value="In Transit">In Transit</option>
+          <option value="At Depot">At Depot</option>
+          <option value="Out for Delivery">Out for Delivery</option>
+          <option value="Delivered">Delivered</option>
+        </select>
+        <input id="location" placeholder="Location (bv: JHB Depot)" />
+        <textarea id="note" rows="4" placeholder="Note (optional)"></textarea>
+        <button id="btnSave">Save Update</button>
+        <button id="btnLogout">Logout</button>
+        <div id="saveMsg" class="muted"></div>
+      </div>
+
+      <div>
+        <h3>Quick view</h3>
+        <input id="lookupId" placeholder="Tracking ID om te check" />
+        <button id="btnLookup">Load</button>
+        <div id="view" class="card" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+
+    // 1) PASTE jou firebaseConfig hier
+    const firebaseConfig = {
+      apiKey: "PASTE",
+      authDomain: "PASTE",
+      projectId: "PASTE",
+      storageBucket: "PASTE",
+      messagingSenderId: "PASTE",
+      appId: "PASTE"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const loginCard = document.getElementById("loginCard");
+    const adminCard = document.getElementById("adminCard");
+
+    const loginMsg = document.getElementById("loginMsg");
+    const saveMsg = document.getElementById("saveMsg");
+    const view = document.getElementById("view");
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loginCard.classList.add("hidden");
+        adminCard.classList.remove("hidden");
+        loginMsg.textContent = "";
+      } else {
+        loginCard.classList.remove("hidden");
+        adminCard.classList.add("hidden");
+      }
+    });
+
+    document.getElementById("btnLogin").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value.trim();
+      loginMsg.textContent = "Logging in...";
+
+      try {
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        loginMsg.textContent = "Logged in ✅ UID: " + cred.user.uid;
+      } catch (e) {
+        loginMsg.textContent = "Login failed: " + (e.message || e);
+      }
+    });
+
+    document.getElementById("btnLogout").addEventListener("click", async () => {
+      await signOut(auth);
+    });
+
+    document.getElementById("btnSave").addEventListener("click", async () => {
+      const trackingId = document.getElementById("trackingId").value.trim();
+      const status = document.getElementById("status").value;
+      const location = document.getElementById("location").value.trim();
+      const note = document.getElementById("note").value.trim();
+
+      if (!trackingId) { saveMsg.textContent = "Tracking ID required."; return; }
+
+      saveMsg.textContent = "Saving...";
+
+      try {
+        await setDoc(doc(db, "shipments", trackingId), {
+          status,
+          location,
+          note,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        saveMsg.textContent = "Saved ✅";
+      } catch (e) {
+        saveMsg.textContent = "Save failed: " + (e.message || e);
+      }
+    });
+
+    document.getElementById("btnLookup").addEventListener("click", async () => {
+      const id = document.getElementById("lookupId").value.trim();
+      if (!id) return;
+
+      view.innerHTML = "Loading...";
+
+      const snap = await getDoc(doc(db, "shipments", id));
+      if (!snap.exists()) {
+        view.innerHTML = `<b>Not found</b><br><span class="muted">Geen shipment vir ${id} nie.</span>`;
+        return;
+      }
+
+      const d = snap.data();
+      const updatedAt = d.updatedAt?.toDate ? d.updatedAt.toDate().toLocaleString() : "—";
+
+      view.innerHTML = `
+        <b>${id}</b><br><br>
+        <b>Status:</b> ${d.status || "—"}<br>
+        <b>Location:</b> ${d.location || "—"}<br>
+        <b>Note:</b> ${d.note || "—"}<br><br>
+        <span class="muted"><b>Last update:</b> ${updatedAt}</span>
+      `;
+    });
+  </script>
+
+</body>
+</html>
