@@ -1,0 +1,9 @@
+# Node.js
+node_modules/
+build/
+coverage/
+.env
+
+# Logs
+logs/
+npm-debug.log*
